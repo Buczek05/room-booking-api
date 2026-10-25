@@ -1,17 +1,28 @@
 const { NotFoundError } = require("../../errors/AppError");
 
-function createRoomsService({ roomsRepository }) {
+function createRoomsService({ runInTransaction }) {
   async function listRooms() {
-    return roomsRepository.findAll();
+    return runInTransaction(({ rooms }) => rooms.findAll());
   }
 
   async function getRoom(id) {
-    const room = await roomsRepository.findById(id);
-    if (!room) throw new NotFoundError("Room");
-    return room;
+    return runInTransaction(async ({ rooms }) => {
+      const room = await rooms.findById(id);
+      if (!room) throw new NotFoundError("Room");
+      return room;
+    });
   }
 
-  return { listRooms, getRoom };
+  // duplikat nazwy sali w budynku pilnuje UNIQUE (building_id, name) w bazie -> 23505 -> 409
+  async function createRoom(input) {
+    return runInTransaction(async ({ buildings, rooms }) => {
+      const building = await buildings.findById(input.buildingId);
+      if (!building) throw new NotFoundError("Building");
+      return rooms.create(input);
+    });
+  }
+
+  return { listRooms, getRoom, createRoom };
 }
 
 module.exports = { createRoomsService };

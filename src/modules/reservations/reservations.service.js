@@ -14,7 +14,7 @@ const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
 
 const bodyError = (field, message) => new ValidationError([{ location: "body", field, message }]);
 
-function createReservationsService({ reservationsRepository, roomsRepository, now = () => new Date() }) {
+function createReservationsService({ runInTransaction, now = () => new Date() }) {
   async function createReservation(input) {
     const start = new Date(input.startTime).getTime();
     const end = new Date(input.endTime).getTime();
@@ -26,61 +26,73 @@ function createReservationsService({ reservationsRepository, roomsRepository, no
     }
     if (start < now().getTime()) throw bodyError("startTime", "startTime cannot be in the past");
 
-    const room = await roomsRepository.findById(input.roomId);
-    if (!room) throw new NotFoundError("Room");
+    return runInTransaction(async ({ rooms, reservations }) => {
+      const room = await rooms.findById(input.roomId);
+      if (!room) throw new NotFoundError("Room");
 
-    if (input.participants > room.capacity) {
-      throw new ConflictError("Room capacity exceeded", "ROOM_CAPACITY_EXCEEDED");
-    }
+      if (input.participants > room.capacity) {
+        throw new ConflictError("Room capacity exceeded", "ROOM_CAPACITY_EXCEEDED");
+      }
 
-    const active = await reservationsRepository.findByRoomAndStatus(input.roomId, "CONFIRMED");
-    const collision = active.some((r) =>
-      overlaps(start, end, new Date(r.startTime).getTime(), new Date(r.endTime).getTime())
-    );
-    if (collision) {
-      throw new ConflictError("Room is already booked in this time range", "ROOM_ALREADY_BOOKED");
-    }
+      const active = await reservations.findByRoomAndStatus(input.roomId, "CONFIRMED");
+      const collision = active.some((r) =>
+        overlaps(start, end, new Date(r.startTime).getTime(), new Date(r.endTime).getTime())
+      );
+      if (collision) {
+        throw new ConflictError("Room is already booked in this time range", "ROOM_ALREADY_BOOKED");
+      }
 
-    return reservationsRepository.create({
-      roomId: input.roomId,
-      reservedBy: input.reservedBy,
-      participants: input.participants,
-      startTime: new Date(start),
-      endTime: new Date(end),
-      status: "CONFIRMED",
-      createdAt: now(),
-      internalNote: "created via API v2",
+      return reservations.create({
+        roomId: input.roomId,
+        reservedBy: input.reservedBy,
+        participants: input.participants,
+        startTime: new Date(start),
+        endTime: new Date(end),
+        status: "CONFIRMED",
+        createdAt: now(),
+      });
     });
   }
 
-  async function listReservations(filters) {
-    return reservationsRepository.findAll(filters);
+  async function listReservations(query) {
+    return runInTransaction(async ({ reservations }) => {
+      const { items, total } = await reservations.list(query);
+      return {
+        items,
+        meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
+      };
+    });
   }
 
   async function getReservation(id) {
-    const reservation = await reservationsRepository.findById(id);
-    if (!reservation) throw new NotFoundError("Reservation");
-    return reservation;
+    return runInTransaction(async ({ reservations }) => {
+      const reservation = await reservations.findById(id);
+      if (!reservation) throw new NotFoundError("Reservation");
+      return reservation;
+    });
   }
 
   async function cancelReservation(id) {
-    const reservation = await getReservation(id);
+    return runInTransaction(async ({ reservations }) => {
+      const reservation = await reservations.findById(id);
+      if (!reservation) throw new NotFoundError("Reservation");
 
-    // idempotencja: ponowne anulowanie zwraca rezerwację bez zmian
-    if (reservation.status === "CANCELLED") return reservation;
+      // idempotencja: ponowne anulowanie zwraca rezerwację bez zmian
+      if (reservation.status === "CANCELLED") return reservation;
 
-    if (!ALLOWED_TRANSITIONS[reservation.status].includes("CANCELLED")) {
-      throw new ConflictError(
-        `Cannot change status from ${reservation.status} to CANCELLED`,
-        "INVALID_STATUS_TRANSITION"
-      );
-    }
+      if (!ALLOWED_TRANSITIONS[reservation.status].includes("CANCELLED")) {
+        throw new ConflictError(
+          `Cannot change status from ${reservation.status} to CANCELLED`,
+          "INVALID_STATUS_TRANSITION"
+        );
+      }
 
-    if (new Date(reservation.startTime).getTime() <= now().getTime()) {
-      throw new ConflictError("Reservation has already started", "RESERVATION_ALREADY_STARTED");
-    }
+      if (new Date(reservation.startTime).getTime() <= now().getTime()) {
+        throw new ConflictError("Reservation has already started", "RESERVATION_ALREADY_STARTED");
+      }
 
-    return reservationsRepository.update(id, { status: "CANCELLED", cancelledAt: now() });
+      return reservations.update(id, { status: "CANCELLED", cancelledAt: now() });
+    });
   }
 
   return { createReservation, listReservations, getReservation, cancelReservation };

@@ -10,6 +10,10 @@ function createRoomsController(roomsService) {
       const room = await roomsService.getRoom(req.validated.params.id);
       res.json(toRoomResponse(room));
     },
+    async create(req, res) {
+      const room = await roomsService.createRoom(req.validated.body);
+      res.status(201).location(`/api/rooms/${room.id}`).json(toRoomResponse(room));
+    },
   };
 }
 

@@ -1,19 +1,29 @@
-const DEFAULT_ROOMS = [
-  { id: 1, name: "A101", capacity: 30 },
-  { id: 2, name: "A102", capacity: 20 },
-  { id: 3, name: "B201", capacity: 50 },
-  { id: 4, name: "C301", capacity: 10 },
-];
-
-function createInMemoryRoomsRepository(seed = DEFAULT_ROOMS) {
-  const rooms = structuredClone(seed);
+// Implementacja in-memory – ten sam interfejs co rooms.repository.knex.js
+function createInMemoryRoomsRepository(state) {
+  let nextId = Math.max(0, ...state.rooms.map((r) => r.id)) + 1;
+  const withBuilding = (room) => {
+    const b = state.buildings.find((x) => x.id === room.buildingId);
+    return { ...room, building: { id: b.id, name: b.name } };
+  };
 
   return {
     async findAll() {
-      return rooms;
+      return state.rooms.map(withBuilding);
     },
     async findById(id) {
-      return rooms.find((r) => r.id === id) ?? null;
+      const room = state.rooms.find((r) => r.id === id);
+      return room ? withBuilding(room) : null;
+    },
+    async findByBuilding(buildingId) {
+      return state.rooms.filter((r) => r.buildingId === buildingId).map(withBuilding);
+    },
+    async create({ buildingId, name, capacity }) {
+      const room = { id: nextId++, buildingId, name, capacity, createdAt: new Date() };
+      state.rooms.push(room);
+      return withBuilding(room);
+    },
+    async lockById() {
+      // w pamięci nie ma współbieżnych transakcji – nic do zablokowania
     },
   };
 }

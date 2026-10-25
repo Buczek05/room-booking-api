@@ -1,48 +1,53 @@
-const HOUR = 60 * 60 * 1000;
+// Implementacja in-memory – ten sam interfejs co reservations.repository.knex.js
+const SORT_FIELDS = { startTime: "startTime", createdAt: "createdAt", participants: "participants" };
+const ts = (v) => new Date(v).getTime();
 
-// Seed: rezerwacja, która była poprawna przy tworzeniu, ale już się rozpoczęła.
-function defaultSeed(now = new Date()) {
-  return [
-    {
-      id: 1,
-      roomId: 3,
-      reservedBy: "Seed – trwające spotkanie",
-      participants: 10,
-      startTime: new Date(now.getTime() - 1 * HOUR),
-      endTime: new Date(now.getTime() + 1 * HOUR),
-      status: "CONFIRMED",
-      createdAt: new Date(now.getTime() - 24 * HOUR),
-      cancelledAt: null,
-      internalNote: "seed data",
-    },
-  ];
-}
+function createInMemoryReservationsRepository(state) {
+  let nextId = Math.max(0, ...state.reservations.map((r) => r.id)) + 1;
 
-function createInMemoryReservationsRepository(seed = defaultSeed()) {
-  const reservations = structuredClone(seed);
-  let nextId = Math.max(0, ...reservations.map((r) => r.id)) + 1;
+  const withRoom = (res) => {
+    const room = state.rooms.find((r) => r.id === res.roomId);
+    const b = state.buildings.find((x) => x.id === room.buildingId);
+    return { ...res, room: { id: room.id, name: room.name, building: { id: b.id, name: b.name } } };
+  };
 
   return {
-    async findAll({ roomId } = {}) {
-      return reservations.filter((r) => roomId === undefined || r.roomId === roomId);
+    async list({ roomId, buildingId, status, from, to, page = 1, limit = 20, sort = "startTime" } = {}) {
+      const desc = sort.startsWith("-");
+      const field = SORT_FIELDS[desc ? sort.slice(1) : sort];
+      const matching = state.reservations
+        .map(withRoom)
+        .filter((r) =>
+          (roomId === undefined || r.roomId === roomId) &&
+          (buildingId === undefined || r.room.building.id === buildingId) &&
+          (status === undefined || r.status === status) &&
+          (to === undefined || ts(r.startTime) < ts(to)) &&
+          (from === undefined || ts(r.endTime) > ts(from)))
+        .sort((a, b) => {
+          const va = field === "participants" ? a[field] : ts(a[field]);
+          const vb = field === "participants" ? b[field] : ts(b[field]);
+          return (desc ? vb - va : va - vb) || a.id - b.id;
+        });
+      return { items: matching.slice((page - 1) * limit, page * limit), total: matching.length };
     },
     async findById(id) {
-      return reservations.find((r) => r.id === id) ?? null;
+      const res = state.reservations.find((r) => r.id === id);
+      return res ? withRoom(res) : null;
     },
     async findByRoomAndStatus(roomId, status) {
-      return reservations.filter((r) => r.roomId === roomId && r.status === status);
+      return state.reservations.filter((r) => r.roomId === roomId && r.status === status);
     },
     async create(data) {
       const reservation = { id: nextId++, cancelledAt: null, ...data };
-      reservations.push(reservation);
-      return reservation;
+      state.reservations.push(reservation);
+      return withRoom(reservation);
     },
     async update(id, changes) {
-      const reservation = reservations.find((r) => r.id === id);
+      const reservation = state.reservations.find((r) => r.id === id);
       Object.assign(reservation, changes);
-      return reservation;
+      return withRoom(reservation);
     },
   };
 }
 
-module.exports = { createInMemoryReservationsRepository, defaultSeed };
+module.exports = { createInMemoryReservationsRepository };

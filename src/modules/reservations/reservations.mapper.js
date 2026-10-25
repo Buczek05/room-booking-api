@@ -1,10 +1,14 @@
 const toIso = (value) => (value ? new Date(value).toISOString() : null);
 
-// Whitelist pól – internalNote nigdy nie trafia do odpowiedzi
+// Whitelist pól – sala i budynek osadzone, bez pól wewnętrznych
 function toReservationResponse(reservation) {
   return {
     id: reservation.id,
-    roomId: reservation.roomId,
+    room: {
+      id: reservation.room.id,
+      name: reservation.room.name,
+      building: { id: reservation.room.building.id, name: reservation.room.building.name },
+    },
     reservedBy: reservation.reservedBy,
     participants: reservation.participants,
     startTime: toIso(reservation.startTime),
