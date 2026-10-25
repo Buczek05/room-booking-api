@@ -1,3 +1,4 @@
+const config = require("./config");
 const db = require("./db/knex");
 const { createApp } = require("./app");
 const { createKnexUnitOfWork } = require("./db/unitOfWork.knex");
@@ -7,7 +8,6 @@ const { createKnexUnitOfWork } = require("./db/unitOfWork.knex");
 const { runInTransaction } = createKnexUnitOfWork(db);
 // const { runInTransaction } = createInMemoryUnitOfWork();
 
-const app = createApp({ runInTransaction, now: () => new Date() });
+const app = createApp({ config, runInTransaction, now: () => new Date() });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(config.PORT, () => console.log(`Server running on http://localhost:${config.PORT}`));

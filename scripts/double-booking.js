@@ -3,7 +3,7 @@
 // Użycie: node scripts/double-booking.js
 const db = require("../src/db/knex");
 
-const BASE = process.env.API_URL || "http://localhost:3000";
+const BASE = "http://localhost:3000";
 const ROOM_ID = 2;
 const START = "2026-12-01T10:00:00.000Z";
 const END = "2026-12-01T12:00:00.000Z";
