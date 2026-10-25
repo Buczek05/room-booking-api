@@ -1,4 +1,4 @@
-const { NotFoundError, ConflictError, ValidationError } = require("../../errors/AppError");
+const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require("../../errors/AppError");
 
 const MIN_DURATION_MS = 15 * 60 * 1000;
 const MAX_DURATION_MS = 8 * 60 * 60 * 1000;
@@ -14,8 +14,13 @@ const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
 
 const bodyError = (field, message) => new ValidationError([{ location: "body", field, message }]);
 
+// Ownership: właściciel albo ADMIN. Obcy USER dostaje 404 – rezerwacje są prywatne,
+// więc nie zdradzamy nawet tego, że rezerwacja o danym ID istnieje.
+const canAccess = (reservation, currentUser) =>
+  currentUser.role === "ADMIN" || reservation.userId === currentUser.id;
+
 function createReservationsService({ runInTransaction, now = () => new Date() }) {
-  async function createReservation(input) {
+  async function createReservation(input, currentUser) {
     const start = new Date(input.startTime).getTime();
     const end = new Date(input.endTime).getTime();
 
@@ -48,7 +53,7 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
 
       return reservations.create({
         roomId: input.roomId,
-        reservedBy: input.reservedBy,
+        userId: currentUser.id, // tożsamość wyłącznie z tokenu, nigdy z body
         participants: input.participants,
         startTime: new Date(start),
         endTime: new Date(end),
@@ -58,9 +63,14 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
     });
   }
 
-  async function listReservations(query) {
+  async function listReservations(query, currentUser) {
+    if (currentUser.role !== "ADMIN" && query.userId !== undefined) {
+      throw new ForbiddenError("Only ADMIN can filter reservations by userId");
+    }
+    // USER widzi tylko swoje rezerwacje – filtr dokłada backend, niezależnie od parametrów
+    const filters = currentUser.role === "ADMIN" ? query : { ...query, userId: currentUser.id };
     return runInTransaction(async ({ reservations }) => {
-      const { items, total } = await reservations.list(query);
+      const { items, total } = await reservations.list(filters);
       return {
         items,
         meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
@@ -68,18 +78,18 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
     });
   }
 
-  async function getReservation(id) {
+  async function getReservation(id, currentUser) {
     return runInTransaction(async ({ reservations }) => {
       const reservation = await reservations.findById(id);
-      if (!reservation) throw new NotFoundError("Reservation");
+      if (!reservation || !canAccess(reservation, currentUser)) throw new NotFoundError("Reservation");
       return reservation;
     });
   }
 
-  async function cancelReservation(id) {
+  async function cancelReservation(id, currentUser) {
     return runInTransaction(async ({ reservations }) => {
       const reservation = await reservations.findById(id);
-      if (!reservation) throw new NotFoundError("Reservation");
+      if (!reservation || !canAccess(reservation, currentUser)) throw new NotFoundError("Reservation");
 
       // idempotencja: ponowne anulowanie zwraca rezerwację bez zmian
       if (reservation.status === "CANCELLED") return reservation;

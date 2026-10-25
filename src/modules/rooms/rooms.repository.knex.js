@@ -31,6 +31,13 @@ function createRoomsRepository(db) {
       const [row] = await db("rooms").insert({ building_id: buildingId, name, capacity }).returning("id");
       return this.findById(row.id);
     },
+    async update(id, { name, capacity }) {
+      await db("rooms").where({ id }).update({ name, capacity });
+      return this.findById(id);
+    },
+    async delete(id) {
+      return (await db("rooms").where({ id }).delete()) > 0;
+    },
     // blokada wiersza sali do końca transakcji (SELECT ... FOR UPDATE)
     async lockById(id) {
       await db("rooms").where({ id }).forUpdate().first();

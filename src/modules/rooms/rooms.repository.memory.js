@@ -22,6 +22,20 @@ function createInMemoryRoomsRepository(state) {
       state.rooms.push(room);
       return withBuilding(room);
     },
+    async update(id, changes) {
+      const room = state.rooms.find((r) => r.id === id);
+      for (const [k, v] of Object.entries(changes)) if (v !== undefined) room[k] = v;
+      return withBuilding(room);
+    },
+    async delete(id) {
+      if (state.reservations.some((r) => r.roomId === id)) {
+        throw Object.assign(new Error("FK"), { code: "23503", constraint: "reservations_room_id_foreign" });
+      }
+      const i = state.rooms.findIndex((r) => r.id === id);
+      if (i === -1) return false;
+      state.rooms.splice(i, 1);
+      return true;
+    },
     async lockById() {
       // w pamięci nie ma współbieżnych transakcji – nic do zablokowania
     },

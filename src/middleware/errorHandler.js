@@ -4,6 +4,12 @@ const { AppError } = require("../errors/AppError");
 const UNIQUE_VIOLATIONS = {
   buildings_name_unique: { code: "BUILDING_NAME_TAKEN", message: "Building with this name already exists" },
   rooms_building_id_name_unique: { code: "ROOM_NAME_TAKEN", message: "Room with this name already exists in this building" },
+  users_email_unique: { code: "EMAIL_TAKEN", message: "Email already registered" },
+};
+
+const FK_VIOLATIONS = {
+  rooms_building_id_foreign: { code: "BUILDING_HAS_ROOMS", message: "Building has rooms and cannot be deleted" },
+  reservations_room_id_foreign: { code: "ROOM_HAS_RESERVATIONS", message: "Room has reservations and cannot be deleted" },
 };
 
 function dbErrorResponse(err) {
@@ -13,7 +19,7 @@ function dbErrorResponse(err) {
     case "23P01": // exclusion_violation
       return { status: 409, code: "ROOM_ALREADY_BOOKED", message: "Room is already booked in this time range" };
     case "23503": // foreign_key_violation
-      return { status: 409, code: "RELATED_RESOURCE_CONFLICT", message: "Operation conflicts with related resources" };
+      return { status: 409, ...(FK_VIOLATIONS[err.constraint] ?? { code: "RELATED_RESOURCE_CONFLICT", message: "Operation conflicts with related resources" }) };
     case "23514": // check_violation
       return { status: 400, code: "CONSTRAINT_VIOLATION", message: "Data violates a database constraint" };
     default:

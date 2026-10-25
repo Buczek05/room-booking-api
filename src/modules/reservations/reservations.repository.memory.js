@@ -8,11 +8,13 @@ function createInMemoryReservationsRepository(state) {
   const withRoom = (res) => {
     const room = state.rooms.find((r) => r.id === res.roomId);
     const b = state.buildings.find((x) => x.id === room.buildingId);
-    return { ...res, room: { id: room.id, name: room.name, building: { id: b.id, name: b.name } } };
+    const user = state.users.find((u) => u.id === res.userId);
+    return { ...res, room: { id: room.id, name: room.name, building: { id: b.id, name: b.name } },
+      user: { id: user.id, email: user.email } };
   };
 
   return {
-    async list({ roomId, buildingId, status, from, to, page = 1, limit = 20, sort = "startTime" } = {}) {
+    async list({ roomId, buildingId, userId, status, from, to, page = 1, limit = 20, sort = "startTime" } = {}) {
       const desc = sort.startsWith("-");
       const field = SORT_FIELDS[desc ? sort.slice(1) : sort];
       const matching = state.reservations
@@ -20,6 +22,7 @@ function createInMemoryReservationsRepository(state) {
         .filter((r) =>
           (roomId === undefined || r.roomId === roomId) &&
           (buildingId === undefined || r.room.building.id === buildingId) &&
+          (userId === undefined || r.userId === userId) &&
           (status === undefined || r.status === status) &&
           (to === undefined || ts(r.startTime) < ts(to)) &&
           (from === undefined || ts(r.endTime) > ts(from)))

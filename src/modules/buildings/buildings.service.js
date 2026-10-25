@@ -18,6 +18,20 @@ function createBuildingsService({ runInTransaction }) {
     return runInTransaction(({ buildings }) => buildings.create(input));
   }
 
+  async function updateBuilding(id, input) {
+    return runInTransaction(async ({ buildings }) => {
+      if (!(await buildings.findById(id))) throw new NotFoundError("Building");
+      return buildings.update(id, input);
+    });
+  }
+
+  // budynku z salami nie da się usunąć (FK ON DELETE RESTRICT -> 23503 -> 409)
+  async function deleteBuilding(id) {
+    return runInTransaction(async ({ buildings }) => {
+      if (!(await buildings.delete(id))) throw new NotFoundError("Building");
+    });
+  }
+
   async function listRoomsInBuilding(buildingId) {
     return runInTransaction(async ({ buildings, rooms }) => {
       const building = await buildings.findById(buildingId);
@@ -26,7 +40,7 @@ function createBuildingsService({ runInTransaction }) {
     });
   }
 
-  return { listBuildings, getBuilding, createBuilding, listRoomsInBuilding };
+  return { listBuildings, getBuilding, createBuilding, updateBuilding, deleteBuilding, listRoomsInBuilding };
 }
 
 module.exports = { createBuildingsService };

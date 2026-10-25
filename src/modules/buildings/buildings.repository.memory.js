@@ -16,6 +16,20 @@ function createInMemoryBuildingsRepository(state) {
       state.buildings.push(building);
       return withCount(building);
     },
+    async update(id, changes) {
+      const building = state.buildings.find((b) => b.id === id);
+      for (const [k, v] of Object.entries(changes)) if (v !== undefined) building[k] = v;
+      return withCount(building);
+    },
+    async delete(id) {
+      if (state.rooms.some((r) => r.buildingId === id)) {
+        throw Object.assign(new Error("FK"), { code: "23503", constraint: "rooms_building_id_foreign" });
+      }
+      const i = state.buildings.findIndex((b) => b.id === id);
+      if (i === -1) return false;
+      state.buildings.splice(i, 1);
+      return true;
+    },
   };
 }
 

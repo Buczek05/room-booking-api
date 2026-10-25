@@ -22,7 +22,21 @@ function createRoomsService({ runInTransaction }) {
     });
   }
 
-  return { listRooms, getRoom, createRoom };
+  async function updateRoom(id, input) {
+    return runInTransaction(async ({ rooms }) => {
+      if (!(await rooms.findById(id))) throw new NotFoundError("Room");
+      return rooms.update(id, input);
+    });
+  }
+
+  // sali z rezerwacjami nie da się usunąć (FK ON DELETE RESTRICT -> 23503 -> 409)
+  async function deleteRoom(id) {
+    return runInTransaction(async ({ rooms }) => {
+      if (!(await rooms.delete(id))) throw new NotFoundError("Room");
+    });
+  }
+
+  return { listRooms, getRoom, createRoom, updateRoom, deleteRoom };
 }
 
 module.exports = { createRoomsService };
