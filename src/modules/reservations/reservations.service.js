@@ -30,6 +30,10 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
       const room = await rooms.findById(input.roomId);
       if (!room) throw new NotFoundError("Room");
 
+      // blokada wiersza sali do końca transakcji: równoległe rezerwacje tej samej sali
+      // czekają tutaj, aż poprzednia transakcja zrobi COMMIT – dopiero wtedy sprawdzają kolizje
+      await rooms.lockById(input.roomId);
+
       if (input.participants > room.capacity) {
         throw new ConflictError("Room capacity exceeded", "ROOM_CAPACITY_EXCEEDED");
       }
