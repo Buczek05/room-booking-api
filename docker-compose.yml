@@ -1,15 +1,34 @@
 services:
   db:
     image: postgres:16
-    container_name: roombooking-db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres # hasło tylko do lokalnej bazy deweloperskiej
-      POSTGRES_DB: roombooking
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5432:5432"
     volumes:
-      - roombooking-pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # w sieci Compose baza jest pod nazwą usługi "db", nie localhost
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
-  roombooking-pgdata:
+  pgdata:
