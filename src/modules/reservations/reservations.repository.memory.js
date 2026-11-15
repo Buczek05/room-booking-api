@@ -10,7 +10,7 @@ function createInMemoryReservationsRepository(state) {
     const b = state.buildings.find((x) => x.id === room.buildingId);
     const user = state.users.find((u) => u.id === res.userId);
     return { ...res, room: { id: room.id, name: room.name, building: { id: b.id, name: b.name } },
-      user: { id: user.id, email: user.email } };
+      user: { id: res.userId, email: user?.email ?? null } };
   };
 
   return {

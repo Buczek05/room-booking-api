@@ -1,4 +1,5 @@
 const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require("../../errors/AppError");
+const { noopEventBus } = require("../../events/eventBus");
 
 const MIN_DURATION_MS = 15 * 60 * 1000;
 const MAX_DURATION_MS = 8 * 60 * 60 * 1000;
@@ -19,7 +20,7 @@ const bodyError = (field, message) => new ValidationError([{ location: "body", f
 const canAccess = (reservation, currentUser) =>
   currentUser.role === "ADMIN" || reservation.userId === currentUser.id;
 
-function createReservationsService({ runInTransaction, now = () => new Date() }) {
+function createReservationsService({ runInTransaction, eventBus = noopEventBus, now = () => new Date() }) {
   async function createReservation(input, currentUser) {
     const start = new Date(input.startTime).getTime();
     const end = new Date(input.endTime).getTime();
@@ -31,7 +32,7 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
     }
     if (start < now().getTime()) throw bodyError("startTime", "startTime cannot be in the past");
 
-    return runInTransaction(async ({ rooms, reservations }) => {
+    const created = await runInTransaction(async ({ rooms, reservations }) => {
       const room = await rooms.findById(input.roomId);
       if (!room) throw new NotFoundError("Room");
 
@@ -61,6 +62,16 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
         createdAt: now(),
       });
     });
+
+    // dopiero po COMMIT – nieudana operacja (wyjątek) nie dochodzi do tej linii
+    eventBus.publish("reservation.created", {
+      reservationId: created.id,
+      roomId: created.roomId,
+      userId: created.userId,
+      startTime: new Date(created.startTime).toISOString(),
+      endTime: new Date(created.endTime).toISOString(),
+    });
+    return created;
   }
 
   async function listReservations(query, currentUser) {
@@ -87,7 +98,8 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
   }
 
   async function cancelReservation(id, currentUser) {
-    return runInTransaction(async ({ reservations }) => {
+    let changed = false;
+    const result = await runInTransaction(async ({ reservations }) => {
       const reservation = await reservations.findById(id);
       if (!reservation || !canAccess(reservation, currentUser)) throw new NotFoundError("Reservation");
 
@@ -105,8 +117,20 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
         throw new ConflictError("Reservation has already started", "RESERVATION_ALREADY_STARTED");
       }
 
+      changed = true;
       return reservations.update(id, { status: "CANCELLED", cancelledAt: now() });
     });
+
+    // event tylko przy faktycznej zmianie (ponowne anulowanie jest idempotentne – bez eventu)
+    if (changed) {
+      eventBus.publish("reservation.cancelled", {
+        reservationId: result.id,
+        roomId: result.roomId,
+        userId: result.userId,
+        cancelledBy: currentUser.id,
+      });
+    }
+    return result;
   }
 
   return { createReservation, listReservations, getReservation, cancelReservation };

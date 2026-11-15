@@ -2,6 +2,7 @@ const { createInMemoryBuildingsRepository } = require("../modules/buildings/buil
 const { createInMemoryRoomsRepository } = require("../modules/rooms/rooms.repository.memory");
 const { createInMemoryReservationsRepository } = require("../modules/reservations/reservations.repository.memory");
 const { createInMemoryUsersRepository } = require("../modules/users/users.repository.memory");
+const { createInMemoryAuditLogRepository } = require("../modules/audit/auditLog.repository.memory");
 
 const HOUR = 60 * 60 * 1000;
 
@@ -33,12 +34,13 @@ function defaultSeed(now = new Date()) {
 
 // Wersja in-memory: brak transakcji, więc runInTransaction po prostu wywołuje funkcję
 function createInMemoryUnitOfWork(seed = defaultSeed()) {
-  const state = structuredClone(seed);
+  const state = { users: [], buildings: [], rooms: [], reservations: [], auditLog: [], ...structuredClone(seed) };
   const repositories = {
     buildings: createInMemoryBuildingsRepository(state),
     rooms: createInMemoryRoomsRepository(state),
     reservations: createInMemoryReservationsRepository(state),
     users: createInMemoryUsersRepository(state),
+    auditLog: createInMemoryAuditLogRepository(state),
   };
   return { repositories, runInTransaction: (fn) => fn(repositories) };
 }

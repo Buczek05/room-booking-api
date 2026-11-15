@@ -22,11 +22,16 @@ const { createReservationsService } = require("./modules/reservations/reservatio
 const { createReservationsController } = require("./modules/reservations/reservations.controller");
 const { createReservationsRouter } = require("./modules/reservations/reservations.routes");
 
+const { createAdminService } = require("./modules/admin/admin.service");
+const { createAdminController } = require("./modules/admin/admin.controller");
+const { createAdminRouter } = require("./modules/admin/admin.routes");
+const { noopEventBus } = require("./events/eventBus");
+
 // Buduje aplikację, ale jej nie uruchamia
-function createApp({ config, runInTransaction, now = () => new Date() }) {
+function createApp({ config, runInTransaction, eventBus = noopEventBus, now = () => new Date() }) {
   const app = express();
 
-  app.use(requestLogger);
+  app.use(config.NODE_ENV === "test" ? requestLogger.createRequestLogger({ log: () => {} }) : requestLogger);
   app.use(express.json());
 
   const requireAuth = authenticate(config.JWT_SECRET);
@@ -38,7 +43,8 @@ function createApp({ config, runInTransaction, now = () => new Date() }) {
   });
   const buildingsService = createBuildingsService({ runInTransaction });
   const roomsService = createRoomsService({ runInTransaction });
-  const reservationsService = createReservationsService({ runInTransaction, now });
+  const reservationsService = createReservationsService({ runInTransaction, eventBus, now });
+  const adminService = createAdminService({ runInTransaction });
 
   // publiczne: dokumentacja, rejestracja, logowanie
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapiDocument));
@@ -48,6 +54,7 @@ function createApp({ config, runInTransaction, now = () => new Date() }) {
   app.use("/api/buildings", requireAuth, createBuildingsRouter(createBuildingsController(buildingsService)));
   app.use("/api/rooms", requireAuth, createRoomsRouter(createRoomsController(roomsService)));
   app.use("/api/reservations", requireAuth, createReservationsRouter(createReservationsController(reservationsService)));
+  app.use("/api/admin", requireAuth, createAdminRouter(createAdminController(adminService)));
 
   app.use(notFound);
   app.use(errorHandler);

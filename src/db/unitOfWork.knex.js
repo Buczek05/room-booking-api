@@ -2,6 +2,7 @@ const { createBuildingsRepository } = require("../modules/buildings/buildings.re
 const { createRoomsRepository } = require("../modules/rooms/rooms.repository.knex");
 const { createReservationsRepository } = require("../modules/reservations/reservations.repository.knex");
 const { createUsersRepository } = require("../modules/users/users.repository.knex");
+const { createAuditLogRepository } = require("../modules/audit/auditLog.repository.knex");
 
 function createKnexRepositories(db) {
   return {
@@ -9,6 +10,7 @@ function createKnexRepositories(db) {
     rooms: createRoomsRepository(db),
     reservations: createReservationsRepository(db),
     users: createUsersRepository(db),
+    auditLog: createAuditLogRepository(db),
   };
 }
 

@@ -14,10 +14,10 @@ module.exports = {
   openapi: "3.0.3",
   info: {
     title: "Room Booking API",
-    version: "4.0.0",
+    version: "5.0.0",
     description: "Rezerwacje sal. Zaloguj się przez POST /api/auth/login, skopiuj accessToken i kliknij Authorize.",
   },
-  tags: [{ name: "Auth" }, { name: "Buildings" }, { name: "Rooms" }, { name: "Reservations" }],
+  tags: [{ name: "Auth" }, { name: "Buildings" }, { name: "Rooms" }, { name: "Reservations" }, { name: "Admin" }],
   components: {
     securitySchemes: {
       bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
@@ -295,6 +295,29 @@ module.exports = {
         responses: {
           200: ok("Rezerwacja", ref("Reservation")), 400: E400, 401: E401,
           404: err("Nie istnieje albo należy do innego użytkownika"),
+        },
+      },
+    },
+    "/api/admin/audit-log": {
+      get: {
+        tags: ["Admin"], summary: "Audit log – zdarzenia rezerwacji, od najnowszych (ADMIN)", security: secured,
+        parameters: [
+          { name: "eventType", in: "query", schema: { type: "string", enum: ["reservation.created", "reservation.cancelled"] } },
+          { name: "page", in: "query", schema: { type: "integer", minimum: 1, default: 1 } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+        ],
+        responses: {
+          200: ok("Strona wpisów audit logu", {
+            type: "object",
+            properties: {
+              data: { type: "array", items: { type: "object", properties: {
+                id: { type: "integer" }, eventType: { type: "string" }, payload: { type: "object" },
+                createdAt: { type: "string", format: "date-time" } } } },
+              meta: { type: "object", properties: { page: { type: "integer" }, limit: { type: "integer" },
+                total: { type: "integer" }, totalPages: { type: "integer" } } },
+            },
+          }),
+          400: E400, 401: E401, 403: E403,
         },
       },
     },
