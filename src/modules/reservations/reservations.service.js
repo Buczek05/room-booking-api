@@ -11,7 +11,7 @@ const ALLOWED_TRANSITIONS = {
 };
 
 // Przedziały półotwarte [start, end): stykające się nie nachodzą na siebie
-const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
+const overlaps = (aStart, aEnd, bStart, bEnd) => aStart <= bEnd && bStart < aEnd;
 
 const bodyError = (field, message) => new ValidationError([{ location: "body", field, message }]);
 
